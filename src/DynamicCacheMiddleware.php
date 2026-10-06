@@ -67,10 +67,17 @@ class DynamicCacheMiddleware implements HTTPMiddleware
      */
     protected static $instance;
     protected $oLogger = null;
-    public static $bStopTheStoringOfCurrentPageInCache = false; // alleen gebruiken op plekken waar je geen headers (meer) kan zetten
+    public static $bStopTheStoringOfCurrentPageInCache = false;
 
     public function process(HTTPRequest $request, callable $delegate)
     {
+        if ( ! self::config()->enabled) {
+            // op projecten waar dynamic cache via yml uit staat gewoon de kortste weg naar de uitgang
+
+            /** @var HTTPResponse $response */
+            return $delegate($request);
+        }
+
         $bTryToGetFromCache = true;
 
         $aLogReason = [];
@@ -353,9 +360,9 @@ class DynamicCacheMiddleware implements HTTPMiddleware
     protected function cacheResult($cache, $result, $headers, $cacheKey, $responseCode)
     {
         $cache->set($cacheKey, serialize([
-            'headers'       => $headers,
-            'response_code' => $responseCode,
-            'content'       => $result
+          'headers'       => $headers,
+          'response_code' => $responseCode,
+          'content'       => $result
         ]));
     }
 
@@ -637,9 +644,9 @@ class DynamicCacheMiddleware implements HTTPMiddleware
         // Substitute security id in forms
         $securityID = SecurityToken::getSecurityID();
         $outputBody = preg_replace(
-            '/\<input type="hidden" name="SecurityID" value="\w+"/',
-            "<input type=\"hidden\" name=\"SecurityID\" value=\"{$securityID}\"",
-            $deserialisedValue['content'] ?? ''
+          '/\<input type="hidden" name="SecurityID" value="\w+"/',
+          "<input type=\"hidden\" name=\"SecurityID\" value=\"{$securityID}\"",
+          $deserialisedValue['content']
         );
 
         if ($outputBody) {
@@ -651,8 +658,8 @@ class DynamicCacheMiddleware implements HTTPMiddleware
                 $parts = explode(':', $header);
                 if (count($parts) >= 2) {
                     $response->addHeader(
-                        trim($parts[0]),
-                        trim(str_replace('HTTP_REPLACE', '://', $parts[1]))
+                      trim($parts[0]),
+                      trim(str_replace('HTTP_REPLACE', '://', $parts[1]))
                     );
                 }
             }
@@ -707,7 +714,6 @@ class DynamicCacheMiddleware implements HTTPMiddleware
 
     public function log($sMsg, $sLevel = LogLevel::INFO)
     {
-        return; // log uit
         // voor nu alles level info
         if ( ! $this->oLogger) {
             $this->initLoggerOnce();

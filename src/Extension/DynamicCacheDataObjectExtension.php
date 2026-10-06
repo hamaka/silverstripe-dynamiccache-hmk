@@ -14,6 +14,7 @@ use TractorCow\DynamicCache\DynamicCacheMiddleware;
  */
 class DynamicCacheDataObjectExtension extends Extension
 {
+
     /**
      * Clear the entire dynamic cache once a dataobject has been saved.
      * Safe and dirty.

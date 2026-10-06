@@ -1,6 +1,7 @@
 ---
 Name: dynamiccacheextensions
 ---
+
 SilverStripe\CMS\Model\SiteTree:
   extensions:
     - 'TractorCow\DynamicCache\Extension\DynamicCacheDataObjectExtension'
@@ -14,11 +15,3 @@ DNADesign\Elemental\Models\BaseElement:
 DNADesign\Elemental\Models\ElementalArea:
   extensions:
     - 'TractorCow\DynamicCache\Extension\DynamicCacheDataObjectExtension'
----
-Name: dynamiccacheformhmk
-Only:
-  classexists: 'Hamaka\Forms\FormHmk'
----
-SilverStripe\Core\Injector\Injector:
-  SilverStripe\Forms\Form:
-    class: Hamaka\Forms\FormHmk
