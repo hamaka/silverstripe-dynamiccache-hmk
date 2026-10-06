@@ -14,8 +14,8 @@
 		"issues": "http://github.com/tractorcow/silverstripe-dynamiccache/issues"
 	},
 	"require": {
-		"silverstripe/framework": "4.*",
-		"silverstripe/cms": "4.*",
+		"silverstripe/framework": "^6",
+		"silverstripe/cms": "^6",
 		"composer/installers": "*"
 	},
 	"extra": {

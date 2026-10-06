@@ -3,7 +3,9 @@
 namespace TractorCow\DynamicCache\Dev;
 
 use SilverStripe\Dev\BuildTask;
-use SilverStripe\ORM\DB;
+use SilverStripe\PolyExecution\PolyOutput;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputInterface;
 use TractorCow\DynamicCache\DynamicCacheMiddleware;
 
 /**
@@ -14,13 +16,15 @@ use TractorCow\DynamicCache\DynamicCacheMiddleware;
  */
 class DynamicCacheClearTask extends BuildTask
 {
-    private static $segment = 'DynamicCacheClearTask';
-    protected $title = "DynamicCache Clear Task";
-    protected $description = "This task clears the entire DynamicCache";
+    protected static string $commandName = 'DynamicCacheClearTask';
+    protected string $title = "DynamicCache Clear Task";
+    protected static string $description = "This task clears the entire DynamicCache";
 
-    public function run($request)
+    protected function execute(InputInterface $input, PolyOutput $output): int
     {
         DynamicCacheMiddleware::inst()->clear();
-        DB::alteration_message('DynamicCache has been cleared.');
+        $output->writeln('DynamicCache has been cleared.');
+
+        return Command::SUCCESS;
     }
 }
