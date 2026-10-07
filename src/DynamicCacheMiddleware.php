@@ -2,27 +2,22 @@
 
 namespace TractorCow\DynamicCache;
 
-use Exception;
 use Monolog\Handler\StreamHandler;
 use Monolog\Level;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 use Psr\SimpleCache\CacheInterface;
-use SilverStripe\Control\Controller;
 use SilverStripe\Control\Director;
 use SilverStripe\Control\HTTPRequest;
 use SilverStripe\Control\HTTPResponse;
-use SilverStripe\Control\HTTPResponse_Exception;
 use SilverStripe\Control\Middleware\HTTPMiddleware;
 use SilverStripe\Control\Session;
-use SilverStripe\Core\Config\Config;
 use SilverStripe\Core\Config\Configurable;
 use SilverStripe\Core\Extensible;
+use SilverStripe\Core\Flushable;
 use SilverStripe\Core\Injector\Injectable;
 use SilverStripe\Core\Injector\Injector;
-use SilverStripe\ORM\DB;
-use SilverStripe\Security\BasicAuth;
-use SilverStripe\Security\Member;
+use SilverStripe\Security\Security;
 use SilverStripe\Security\SecurityToken;
 use SilverStripe\Versioned\Versioned;
 use function array_diff;
@@ -42,7 +37,6 @@ use function is_array;
 use function join;
 use function json_encode;
 use function md5;
-use function preg_grep;
 use function preg_match;
 use function preg_replace;
 use function serialize;
@@ -54,7 +48,7 @@ use function trim;
 use function unserialize;
 use const BASE_PATH;
 
-class DynamicCacheMiddleware implements HTTPMiddleware
+class DynamicCacheMiddleware implements HTTPMiddleware, Flushable
 {
     use Configurable;
     use Extensible;
@@ -212,10 +206,11 @@ class DynamicCacheMiddleware implements HTTPMiddleware
 
         // Run this page, caching output and capturing data
 
-        // Skip blank copy unless redirecting
-        $locationHeaderMatches = preg_grep('/^Location/i', $headers);
-        if (empty($result) && empty($locationHeaderMatches)) {
-            $aLogReason[]             = 'Er zijn Location headers in de response';
+        // Een response zonder body niet opslaan. Dat zijn vooral redirects: getCachedResult() kan een
+        // lege body niet teruggeven, dus zo'n entry zou bij elk request opnieuw worden opgeslagen
+        // zonder ooit gebruikt te worden
+        if (empty($result)) {
+            $aLogReason[]             = 'Lege body (bijvoorbeeld een redirect)';
             $bIsStoringInCacheEnabled = false;
         }
 
@@ -291,7 +286,7 @@ class DynamicCacheMiddleware implements HTTPMiddleware
 
             if (self::config()->logMiss || self::config()->logDontStore) {
                 $aReasonsNotLogged = [
-                    'Er zijn Location headers in de response', // voor nu uit want je kan wel bezig blijven met alle redirects naar urls MET een slash aan het einde
+                    'Lege body (bijvoorbeeld een redirect)', // voor nu uit want je kan wel bezig blijven met alle redirects naar urls MET een slash aan het einde
                 ];
 
                 if (sizeof($aLogReason) === 1 && in_array($aLogReason[0], $aReasonsNotLogged)) {
@@ -332,6 +327,14 @@ class DynamicCacheMiddleware implements HTTPMiddleware
         // bij het opstarten van een Elemental blokje met een formulier er in.
         if (static::$bStopTheStoringOfCurrentPageInCache === true) {
             $aLogReason[] = 'static halt';
+
+            return false;
+        }
+
+        // Een pagina die voor een ingelogde gebruiker is opgebouwd nooit opslaan, anders krijgt
+        // iedere volgende bezoeker die versie te zien
+        if (Security::getCurrentUser()) {
+            $aLogReason[] = 'Ingelogd in Silverstripe';
 
             return false;
         }
@@ -429,6 +432,10 @@ class DynamicCacheMiddleware implements HTTPMiddleware
         return "DynamicCache_" . md5(implode('|', array_map('md5', $fragments)));
     }
 
+    /**
+     * Via Flushable aangeroepen bij ?flush=1 en dev/build flush=1: maakt de hele paginacache leeg,
+     * zodat na een deploy geen pagina's met oude templates uit de cache komen.
+     */
     public static function flush()
     {
         self::inst()->clear();
@@ -454,7 +461,6 @@ class DynamicCacheMiddleware implements HTTPMiddleware
      * @param HTTPRequest $request
      *
      * @return bool
-     * @throws Exception
      */
     protected function enabled(HTTPRequest $request, &$aLogReason = [])
     {
@@ -503,54 +509,15 @@ class DynamicCacheMiddleware implements HTTPMiddleware
             return false;
         }
 
-        // If user failed BasicAuth, disable cache and fallback to PHP code
-        $basicAuthConfig = Config::forClass(BasicAuth::class);
-        if ($basicAuthConfig->entire_site_protected) {
-            // NOTE(Jake): Required so BasicAuth::requireLogin() doesn't early exit with a 'true' value
-            // This will affect caching performance with BasicAuth turned on.
-            if ( ! DB::is_active()) {
-                global $databaseConfig;
-                if ($databaseConfig) {
-                    DB::connect($databaseConfig);
-                }
-            }
-
-            // If no DB configured / failed to connect
-            if ( ! DB::is_active()) {
-                return false;
-            }
-
-            // NOTE(Jake): Required so MemberAuthenticator::record_login_attempt() can call
-            //             Controller::curr()->getRequest()->getIP()
-            $stubController = new Controller();
-            $stubController->pushCurrent();
-
-            $member = null;
-            try {
-                $member = BasicAuth::requireLogin($basicAuthConfig->entire_site_protected_message, $basicAuthConfig->entire_site_protected_code, false);
-            }
-            catch (HTTPResponse_Exception $e) {
-                // This codepath means Member auth failed
-            }
-            catch (Exception $e) {
-                // This means an issue occurred elsewhere
-                throw $e;
-            }
-            $stubController->popCurrent();
-            // Do not cache because:
-            // - $member === true when: "Security::database_is_ready()" is false (No Member tables configured) or unit testing
-            // - $member is not a Member object, means the authentication failed.
-            if ($member === true || ! $member instanceof Member) {
-                return false;
-            }
-        }
+        // Whole-site BasicAuth hoeft hier niet gecontroleerd te worden: de BasicAuthMiddleware van Silverstripe
+        // draait vóór deze middleware en laat bezoekers zonder geldige inlog niet door
 
         // If displaying form errors then don't display cached result
         /** @var Session $oSession */
         $oSession = $request->getSession();
 
         $aSessionData = $oSession->getAll();
-        if (empty($sessionData)) {
+        if (empty($aSessionData)) {
             return true;
         }
 
@@ -641,13 +608,17 @@ class DynamicCacheMiddleware implements HTTPMiddleware
             header("$responseHeader: hit - from cache " . @date('r'));
         }
 
-        // Substitute security id in forms
-        $securityID = SecurityToken::getSecurityID();
-        $outputBody = preg_replace(
-          '/\<input type="hidden" name="SecurityID" value="\w+"/',
-          "<input type=\"hidden\" name=\"SecurityID\" value=\"{$securityID}\"",
-          $deserialisedValue['content']
-        );
+        // Substitute security id in forms. Alleen als de pagina een SecurityID-veld bevat: het token opvragen
+        // start een sessie (met cookie) en dat is niet nodig voor pagina's zonder formulier
+        $outputBody = $deserialisedValue['content'] ?? '';
+        if (strpos($outputBody, 'name="SecurityID"') !== false) {
+            $securityID = SecurityToken::getSecurityID();
+            $outputBody = preg_replace(
+              '/\<input type="hidden" name="SecurityID" value="\w+"/',
+              "<input type=\"hidden\" name=\"SecurityID\" value=\"{$securityID}\"",
+              $outputBody
+            );
+        }
 
         if ($outputBody) {
             $response = HTTPResponse::create();
@@ -655,7 +626,9 @@ class DynamicCacheMiddleware implements HTTPMiddleware
             $response->setStatusCode($deserialisedValue['response_code']);
 
             foreach ($deserialisedValue['headers'] as $header) {
-                $parts = explode(':', $header);
+                // limit 2: alleen splitsen op de eerste dubbele punt, zodat waarden met een dubbele punt
+                // (tijden, datums, URL's met een poort) heel blijven
+                $parts = explode(':', $header, 2);
                 if (count($parts) >= 2) {
                     $response->addHeader(
                       trim($parts[0]),
