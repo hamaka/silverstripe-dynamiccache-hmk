@@ -657,7 +657,9 @@ class DynamicCacheMiddleware implements HTTPMiddleware
             $response->setStatusCode($deserialisedValue['response_code']);
 
             foreach ($deserialisedValue['headers'] as $header) {
-                $parts = explode(':', $header);
+                // limit 2: alleen splitsen op de eerste dubbele punt, zodat waarden met een dubbele punt
+                // (tijden, datums, URL's met een poort) heel blijven
+                $parts = explode(':', $header, 2);
                 if (count($parts) >= 2) {
                     $response->addHeader(
                         trim($parts[0]),
