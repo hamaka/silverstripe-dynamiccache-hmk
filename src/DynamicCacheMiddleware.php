@@ -601,13 +601,17 @@ class DynamicCacheMiddleware implements HTTPMiddleware, Flushable
             header("$responseHeader: hit - from cache " . @date('r'));
         }
 
-        // Substitute security id in forms
-        $securityID = SecurityToken::getSecurityID();
-        $outputBody = preg_replace(
-            '/\<input type="hidden" name="SecurityID" value="\w+"/',
-            "<input type=\"hidden\" name=\"SecurityID\" value=\"{$securityID}\"",
-            $deserialisedValue['content'] ?? ''
-        );
+        // Substitute security id in forms. Alleen als de pagina een SecurityID-veld bevat: het token opvragen
+        // start een sessie (met cookie) en dat is niet nodig voor pagina's zonder formulier
+        $outputBody = $deserialisedValue['content'] ?? '';
+        if (strpos($outputBody, 'name="SecurityID"') !== false) {
+            $securityID = SecurityToken::getSecurityID();
+            $outputBody = preg_replace(
+                '/\<input type="hidden" name="SecurityID" value="\w+"/',
+                "<input type=\"hidden\" name=\"SecurityID\" value=\"{$securityID}\"",
+                $outputBody
+            );
+        }
 
         if ($outputBody) {
             $response = HTTPResponse::create();
