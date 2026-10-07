@@ -18,6 +18,7 @@ use SilverStripe\Control\Session;
 use SilverStripe\Core\Config\Config;
 use SilverStripe\Core\Config\Configurable;
 use SilverStripe\Core\Extensible;
+use SilverStripe\Core\Flushable;
 use SilverStripe\Core\Injector\Injectable;
 use SilverStripe\Core\Injector\Injector;
 use SilverStripe\ORM\DB;
@@ -54,7 +55,7 @@ use function trim;
 use function unserialize;
 use const BASE_PATH;
 
-class DynamicCacheMiddleware implements HTTPMiddleware
+class DynamicCacheMiddleware implements HTTPMiddleware, Flushable
 {
     use Configurable;
     use Extensible;
@@ -431,6 +432,10 @@ class DynamicCacheMiddleware implements HTTPMiddleware
         return "DynamicCache_" . md5(implode('|', array_map('md5', $fragments)));
     }
 
+    /**
+     * Via Flushable aangeroepen bij ?flush=1 en dev/build flush=1: maakt de hele paginacache leeg,
+     * zodat na een deploy geen pagina's met oude templates uit de cache komen.
+     */
     public static function flush()
     {
         self::inst()->clear();
