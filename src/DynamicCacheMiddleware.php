@@ -43,7 +43,6 @@ use function is_array;
 use function join;
 use function json_encode;
 use function md5;
-use function preg_grep;
 use function preg_match;
 use function preg_replace;
 use function serialize;
@@ -206,10 +205,11 @@ class DynamicCacheMiddleware implements HTTPMiddleware
 
         // Run this page, caching output and capturing data
 
-        // Skip blank copy unless redirecting
-        $locationHeaderMatches = preg_grep('/^Location/i', $headers);
-        if (empty($result) && empty($locationHeaderMatches)) {
-            $aLogReason[]             = 'Er zijn Location headers in de response';
+        // Een response zonder body niet opslaan. Dat zijn vooral redirects: getCachedResult() kan een
+        // lege body niet teruggeven, dus zo'n entry zou bij elk request opnieuw worden opgeslagen
+        // zonder ooit gebruikt te worden
+        if (empty($result)) {
+            $aLogReason[]             = 'Lege body (bijvoorbeeld een redirect)';
             $bIsStoringInCacheEnabled = false;
         }
 
@@ -285,7 +285,7 @@ class DynamicCacheMiddleware implements HTTPMiddleware
 
             if (self::config()->logMiss || self::config()->logDontStore) {
                 $aReasonsNotLogged = [
-                    'Er zijn Location headers in de response', // voor nu uit want je kan wel bezig blijven met alle redirects naar urls MET een slash aan het einde
+                    'Lege body (bijvoorbeeld een redirect)', // voor nu uit want je kan wel bezig blijven met alle redirects naar urls MET een slash aan het einde
                 ];
 
                 if (sizeof($aLogReason) === 1 && in_array($aLogReason[0], $aReasonsNotLogged)) {
