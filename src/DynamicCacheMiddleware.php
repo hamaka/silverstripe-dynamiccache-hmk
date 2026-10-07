@@ -2,28 +2,21 @@
 
 namespace TractorCow\DynamicCache;
 
-use Exception;
 use Monolog\Handler\StreamHandler;
 use Monolog\Level;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 use Psr\SimpleCache\CacheInterface;
-use SilverStripe\Control\Controller;
 use SilverStripe\Control\Director;
 use SilverStripe\Control\HTTPRequest;
 use SilverStripe\Control\HTTPResponse;
-use SilverStripe\Control\HTTPResponse_Exception;
 use SilverStripe\Control\Middleware\HTTPMiddleware;
 use SilverStripe\Control\Session;
-use SilverStripe\Core\Config\Config;
 use SilverStripe\Core\Config\Configurable;
 use SilverStripe\Core\Extensible;
 use SilverStripe\Core\Flushable;
 use SilverStripe\Core\Injector\Injectable;
 use SilverStripe\Core\Injector\Injector;
-use SilverStripe\ORM\DB;
-use SilverStripe\Security\BasicAuth;
-use SilverStripe\Security\Member;
 use SilverStripe\Security\Security;
 use SilverStripe\Security\SecurityToken;
 use SilverStripe\Versioned\Versioned;
@@ -461,7 +454,6 @@ class DynamicCacheMiddleware implements HTTPMiddleware, Flushable
      * @param HTTPRequest $request
      *
      * @return bool
-     * @throws Exception
      */
     protected function enabled(HTTPRequest $request, &$aLogReason = [])
     {
@@ -510,47 +502,8 @@ class DynamicCacheMiddleware implements HTTPMiddleware, Flushable
             return false;
         }
 
-        // If user failed BasicAuth, disable cache and fallback to PHP code
-        $basicAuthConfig = Config::forClass(BasicAuth::class);
-        if ($basicAuthConfig->entire_site_protected) {
-            // NOTE(Jake): Required so BasicAuth::requireLogin() doesn't early exit with a 'true' value
-            // This will affect caching performance with BasicAuth turned on.
-            if ( ! DB::is_active()) {
-                global $databaseConfig;
-                if ($databaseConfig) {
-                    DB::connect($databaseConfig);
-                }
-            }
-
-            // If no DB configured / failed to connect
-            if ( ! DB::is_active()) {
-                return false;
-            }
-
-            // NOTE(Jake): Required so MemberAuthenticator::record_login_attempt() can call
-            //             Controller::curr()->getRequest()->getIP()
-            $stubController = new Controller();
-            $stubController->pushCurrent();
-
-            $member = null;
-            try {
-                $member = BasicAuth::requireLogin($basicAuthConfig->entire_site_protected_message, $basicAuthConfig->entire_site_protected_code, false);
-            }
-            catch (HTTPResponse_Exception $e) {
-                // This codepath means Member auth failed
-            }
-            catch (Exception $e) {
-                // This means an issue occurred elsewhere
-                throw $e;
-            }
-            $stubController->popCurrent();
-            // Do not cache because:
-            // - $member === true when: "Security::database_is_ready()" is false (No Member tables configured) or unit testing
-            // - $member is not a Member object, means the authentication failed.
-            if ($member === true || ! $member instanceof Member) {
-                return false;
-            }
-        }
+        // Whole-site BasicAuth hoeft hier niet gecontroleerd te worden: de BasicAuthMiddleware van Silverstripe
+        // draait vóór deze middleware en laat bezoekers zonder geldige inlog niet door
 
         // If displaying form errors then don't display cached result
         /** @var Session $oSession */
