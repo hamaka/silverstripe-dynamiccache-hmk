@@ -23,6 +23,7 @@ use SilverStripe\Core\Injector\Injector;
 use SilverStripe\ORM\DB;
 use SilverStripe\Security\BasicAuth;
 use SilverStripe\Security\Member;
+use SilverStripe\Security\Security;
 use SilverStripe\Security\SecurityToken;
 use SilverStripe\Versioned\Versioned;
 use function array_diff;
@@ -329,6 +330,14 @@ class DynamicCacheMiddleware implements HTTPMiddleware
             return false;
         }
 
+        // Een pagina die voor een ingelogde gebruiker is opgebouwd nooit opslaan, anders krijgt
+        // iedere volgende bezoeker die versie te zien
+        if (Security::getCurrentUser()) {
+            $aLogReason[] = 'Ingelogd in Silverstripe';
+
+            return false;
+        }
+
         return true;
     }
 
@@ -543,7 +552,7 @@ class DynamicCacheMiddleware implements HTTPMiddleware
         $oSession = $request->getSession();
 
         $aSessionData = $oSession->getAll();
-        if (empty($sessionData)) {
+        if (empty($aSessionData)) {
             return true;
         }
 
