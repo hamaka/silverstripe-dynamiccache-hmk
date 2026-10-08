@@ -18,6 +18,11 @@
 		"silverstripe/cms": "^5",
 		"composer/installers": "*"
 	},
+	"autoload": {
+		"psr-4": {
+			"TractorCow\\DynamicCache\\": "src/"
+		}
+	},
 	"extra": {
 		"installer-name": "dynamiccache",
 		"branch-alias": {
