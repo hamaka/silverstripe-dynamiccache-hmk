@@ -39,7 +39,8 @@ class DynamicCacheControllerExtension extends Extension
         // Set header disabling caching if
         // - current page is an ignored page type
         // - current_stage is not live
-        if ($ignoredByClass) {
+        // Staat de module uit via config (enabled: false), dan slaat de middleware niets op en is de header overbodig
+        if ($ignoredByClass && DynamicCacheMiddleware::config()->enabled) {
             $header = DynamicCacheMiddleware::config()->optOutHeaderString;
             header($header); // dit kan nog niet op de HTTPResponse van de huidige controller
             //DynamicCacheMiddleware::$bStopTheStoringOfCurrentPageInCache = true;

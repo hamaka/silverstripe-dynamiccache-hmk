@@ -65,6 +65,13 @@ class DynamicCacheMiddleware implements HTTPMiddleware, Flushable
 
     public function process(HTTPRequest $request, callable $delegate)
     {
+        if ( ! self::config()->enabled) {
+            // op projecten waar dynamic cache via yml uit staat gewoon de kortste weg naar de uitgang
+
+            /** @var HTTPResponse $response */
+            return $delegate($request);
+        }
+
         $bTryToGetFromCache = true;
 
         $aLogReason = [];
