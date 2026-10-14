@@ -687,7 +687,6 @@ class DynamicCacheMiddleware implements HTTPMiddleware, Flushable
 
     public function log($sMsg, $sLevel = LogLevel::INFO)
     {
-        return; // log uit
         // voor nu alles level info
         if ( ! $this->oLogger) {
             $this->initLoggerOnce();
