@@ -41,8 +41,15 @@ class DynamicCacheControllerExtension extends Extension
         // - current_stage is not live
         // Staat de module uit via config (enabled: false), dan slaat de middleware niets op en is de header overbodig
         if ($ignoredByClass && DynamicCacheMiddleware::config()->enabled) {
-            $header = DynamicCacheMiddleware::config()->optOutHeaderString;
-            header($header); // dit kan nog niet op de HTTPResponse van de huidige controller
+            if (headers_sent()) {
+                // na eerdere output (bv. een BuildTask die pagina's rendert) kan er geen header meer bij;
+                // dan via de static voorkomen dat deze pageload in de cache belandt
+                DynamicCacheMiddleware::$bStopTheStoringOfCurrentPageInCache = true;
+            }
+            else {
+                $header = DynamicCacheMiddleware::config()->optOutHeaderString;
+                header($header); // dit kan nog niet op de HTTPResponse van de huidige controller
+            }
             //DynamicCacheMiddleware::$bStopTheStoringOfCurrentPageInCache = true;
         }
 
